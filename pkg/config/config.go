@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/humbertovnavarro/tor-reverse-shell/pkg/os_helpers"
+	"github.com/humbertovnavarro/tor-reverse-shell/pkg/fs"
 	"github.com/joho/godotenv"
 )
 
@@ -46,7 +46,7 @@ func fetchNodeUUID() string {
 		return NodeUUID
 	}
 	uuidFilePath := fmt.Sprintf("%s/%s", UserDir, "uuid")
-	exists, _ := os_helpers.FileExists(uuidFilePath)
+	exists, _ := fs.Exists(uuidFilePath)
 	if exists {
 		fileData, err := ioutil.ReadFile(uuidFilePath)
 		if err != nil {

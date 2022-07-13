@@ -18,32 +18,29 @@ const (
 var jobsById = make(map[string]*job)
 var JobScheduler *gocron.Scheduler = gocron.NewScheduler(time.UTC)
 
-type Job struct {
+type job struct {
+	JobStartConfig
+	Process *os.Process
+	Status  int
+	OnDone  func(j job, err error)
+	OnStop  func(j job, err error)
+	OnStart func(j job, err error)
+}
+
+type JobStartConfig struct {
 	Requires   []string   `json:"requires"`
 	Executable string     `json:"executable"`
 	Args       string     `json:"string"`
 	UUID       string     `json:"uuid"`
-	Status     int        `json:"status"`
 	Expires    *time.Time `json:"expires"`
 	StopsAt    *time.Time `json:"stopsAt"`
 	StartsAt   *time.Time `json:"startsAt"`
+	OnDone     func(j job, err error)
+	OnStop     func(j job, err error)
+	OnStart    func(j job, err error)
 }
 
-type job struct {
-	Job
-	Process *os.Process
-	OnDone  func(j job, err error)
-	OnStop  func(j job, err error)
-	OnStart func(j job, err error)
-}
-
-type JobConfig struct {
-	OnDone  func(j job, err error)
-	OnStop  func(j job, err error)
-	OnStart func(j job, err error)
-}
-
-func New(j Job, config JobConfig) *job {
+func New(config JobStartConfig) *job {
 	return &job{
 		OnDone:  config.OnDone,
 		OnStop:  config.OnStop,

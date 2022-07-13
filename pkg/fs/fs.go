@@ -1,11 +1,11 @@
-package os_helpers
+package fs
 
 import (
 	"errors"
 	"os"
 )
 
-func FileExists(file string) (bool, error) {
+func Exists(file string) (bool, error) {
 	_, err := os.Stat(file)
 	if err == nil {
 		return true, nil
