@@ -12,6 +12,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// What the node itself is capable of doing. i.e. HasGpu, etc.
+var NodeCapabilities []string
 var NodeUUID string
 var userConfigDir, _ = os.UserConfigDir()
 var UserDir = fmt.Sprintf("%s/tshell", userConfigDir)

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-
 	"github.com/humbertovnavarro/tor-reverse-shell/pkg/tor"
 )
 
