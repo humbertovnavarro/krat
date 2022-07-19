@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/go-co-op/gocron"
-	"github.com/humbertovnavarro/tor-reverse-shell/pkg/database"
+	"github.com/humbertovnavarro/krat/pkg/database"
 )
 
 const (

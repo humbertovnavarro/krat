@@ -1,4 +1,4 @@
-module github.com/humbertovnavarro/tor-reverse-shell
+module github.com/humbertovnavarro/krat
 
 go 1.18
 

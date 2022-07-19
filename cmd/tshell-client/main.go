@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/humbertovnavarro/tor-reverse-shell/pkg/client"
+	"github.com/humbertovnavarro/krat/pkg/client"
 )
 
 func main() {

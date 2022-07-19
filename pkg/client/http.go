@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/humbertovnavarro/tor-reverse-shell/pkg/tor_engine"
+	"github.com/humbertovnavarro/krat/pkg/tor_engine"
 )
 
 func StartHTTPServer(l net.Listener, e *tor_engine.TorEngine, c chan error) {

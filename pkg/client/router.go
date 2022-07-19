@@ -4,7 +4,7 @@ import (
 	"os/exec"
 
 	"github.com/gin-gonic/gin"
-	"github.com/humbertovnavarro/tor-reverse-shell/pkg/tor_engine"
+	"github.com/humbertovnavarro/krat/pkg/tor_engine"
 )
 
 func router(e *tor_engine.TorEngine) *gin.Engine {

