@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"strings"
 
@@ -12,8 +11,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// What the node itself is capable of doing. i.e. HasGpu, etc.
-var NodeCapabilities []string
 var NodeUUID string
 var userConfigDir, _ = os.UserConfigDir()
 var UserDir = fmt.Sprintf("%s/tshell", userConfigDir)
@@ -35,10 +32,10 @@ func init() {
 		return
 	}
 	if !strings.HasPrefix(".onion", MasterNode) {
-		log.Fatalf("tor: invalid onion address: %s", MasterNode)
+		panic("config: master node is an invalid onion address")
 	}
 	if MasterNode == "" {
-		panic("tor: could not resolve master node")
+		panic("config: master node not configured")
 	}
 	Debug = os.Getenv("DEBUG") != ""
 }

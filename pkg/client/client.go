@@ -2,11 +2,16 @@ package client
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"time"
 
 	"github.com/cretz/bine/tor"
 	"github.com/humbertovnavarro/krat/pkg/config"
 	"github.com/humbertovnavarro/krat/pkg/tor_engine"
 	"github.com/ipsn/go-libtor"
+	"github.com/sirupsen/logrus"
 )
 
 var torStartConf = &tor.StartConf{
@@ -29,14 +34,6 @@ func Start() error {
 
 func OnTorConnect(e *tor_engine.TorEngine) {
 	fmt.Println("tor connected")
-	httpOnion, err := e.NewOnionListener(&tor.ListenConf{
-		RemotePorts: []int{80},
-		Version3:    true,
-		Detach:      false,
-	})
-	if err != nil {
-		panic(err)
-	}
 	sshOnion, err := e.NewOnionListener(&tor.ListenConf{
 		RemotePorts: []int{22},
 		Version3:    true,
@@ -45,11 +42,24 @@ func OnTorConnect(e *tor_engine.TorEngine) {
 	if err != nil {
 		panic(err)
 	}
-	ch := make(chan error)
-	go StartHTTPServer(httpOnion, e, ch)
-	go StartSSHServer(sshOnion, ch)
-	err = <-ch
-	if err != nil {
-		panic(err)
-	}
+	eCh := make(chan error)
+	sCh := make(chan os.Signal, 1)
+	signal.Notify(sCh, os.Interrupt)
+	go StartSSHServer(sshOnion, eCh)
+	go func() {
+		for err := range eCh {
+			logrus.Info(err)
+			time.Sleep(time.Second)
+		}
+	}()
+	func() {
+		for sig := range sCh {
+			log.Printf("captured %v, stopping tor gracefully..", sig)
+			err := e.Tor.Close()
+			if err != nil {
+				panic(err)
+			}
+			os.Exit(0)
+		}
+	}()
 }
