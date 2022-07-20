@@ -33,6 +33,7 @@ func New(conf *TorEngineConf, callback OnConnect) *TorEngine {
 
 func (e *TorEngine) Start() error {
 	t, err := tor.Start(context.Background(), e.conf.Start)
+	// set the tor Open status to closed using the ProcessCancelFunc callback
 	t.ProcessCancelFunc = func() {
 		e.Open = false
 	}
@@ -40,19 +41,15 @@ func (e *TorEngine) Start() error {
 	if err != nil {
 		return err
 	}
-	if err != nil {
-		return err
-	}
-	if err != nil {
-		return err
-	}
+	// call the on connect callback inside of TorEngine
 	e.onConnect(e)
 	return err
 }
 
+// Create a new .onion hideen service and return a *tor.OnionService (interface compatible with net.Listener)
 func (e *TorEngine) NewOnionListener(listenConf *tor.ListenConf) (*tor.OnionService, error) {
 	if e.Tor == nil {
-		return nil, errors.New("tor: the tor service is nil")
+		return nil, errors.New("tried to create a new onion service before starting tor")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -63,6 +60,7 @@ func (e *TorEngine) NewOnionListener(listenConf *tor.ListenConf) (*tor.OnionServ
 	return onion, nil
 }
 
+// Create a new http client proxied through tor
 func (e *TorEngine) NewHTTPClient() (*http.Client, error) {
 	dialer, err := e.NewDialer()
 	if err != nil {
