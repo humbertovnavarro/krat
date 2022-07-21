@@ -2,18 +2,17 @@ package tor_engine
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"time"
 
 	"github.com/cretz/bine/tor"
 )
 
+type OnConnect = func(e *TorEngine)
+
 type TorEngineConf struct {
 	Start *tor.StartConf
 }
-
-type OnConnect = func(e *TorEngine)
 
 type TorEngine struct {
 	onConnect OnConnect
@@ -46,20 +45,6 @@ func (e *TorEngine) Start() error {
 	return err
 }
 
-// Create a new .onion hideen service and return a *tor.OnionService (interface compatible with net.Listener)
-func (e *TorEngine) NewOnionListener(listenConf *tor.ListenConf) (*tor.OnionService, error) {
-	if e.Tor == nil {
-		return nil, errors.New("tried to create a new onion service before starting tor")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	onion, err := e.Tor.Listen(ctx, listenConf)
-	if err != nil {
-		return nil, err
-	}
-	return onion, nil
-}
-
 // Create a new http client proxied through tor
 func (e *TorEngine) NewHTTPClient() (*http.Client, error) {
 	dialer, err := e.NewDialer()
@@ -69,6 +54,7 @@ func (e *TorEngine) NewHTTPClient() (*http.Client, error) {
 	return &http.Client{Transport: &http.Transport{DialContext: dialer.DialContext}}, nil
 }
 
+// Create a new dialer proxied through tor
 func (c *TorEngine) NewDialer() (*tor.Dialer, error) {
 	if c.Dialer != nil {
 		return c.Dialer, nil

@@ -2,65 +2,49 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
-	"strings"
 
-	"github.com/google/uuid"
-	"github.com/humbertovnavarro/krat/pkg/fs"
 	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 )
 
-var NodeUUID string
-var userConfigDir, _ = os.UserConfigDir()
-var UserDir = fmt.Sprintf("%s/tshell", userConfigDir)
-var MasterNode string
-var Debug bool = true
+var UUID string
+var AppName string
+var Remote string
+var AppDataDir string
 
 func init() {
 	godotenv.Load()
-	fetchNodeUUID()
-	err := os.MkdirAll(UserDir, os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-	if MasterNode == "" {
-		MasterNode = os.Getenv("MASTER_NODE")
-	}
-	// Skip master check in debug mode
-	if os.Getenv("DEBUG") != "" {
-		return
-	}
-	if !strings.HasPrefix(".onion", MasterNode) {
-		panic("config: master node is an invalid onion address")
-	}
-	if MasterNode == "" {
-		panic("config: master node not configured")
-	}
-	Debug = os.Getenv("DEBUG") != ""
+	AppName = os.Getenv("APP_NAME")
+	Remote = os.Getenv("REMOTE")
+	fetchAppDataDir()
 }
 
-func fetchNodeUUID() string {
-	if NodeUUID != "" {
-		return NodeUUID
-	}
-	uuidFilePath := fmt.Sprintf("%s/%s", UserDir, "uuid")
-	exists, _ := fs.Exists(uuidFilePath)
-	if exists {
-		fileData, err := ioutil.ReadFile(uuidFilePath)
-		if err != nil {
-			panic(err)
-		}
-		NodeUUID = string(fileData)
-		return string(fileData)
-	}
-	f, err := os.Create(uuidFilePath)
+func GetEnv(name string) string {
+	return os.Getenv(name)
+}
+
+func fetchAppDataDir() string {
+	d, err := os.UserHomeDir()
 	if err != nil {
-		panic(err)
+		logrus.Fatal(err)
 	}
-	_nodeUUID := uuid.NewString()
-	NodeUUID = _nodeUUID
-	f.WriteString(uuid.NewString())
-	f.Close()
-	return _nodeUUID
+	appDir := fmt.Sprintf("%s/.%s", d, AppName)
+	AppDataDir = appDir
+	return appDir
+}
+
+func NewFilePath(directoryStructure ...string) string {
+	if len(directoryStructure) == 0 {
+		return AppDataDir
+	}
+	if len(directoryStructure) == 1 {
+		return fmt.Sprintf("%s/%s", AppDataDir, directoryStructure[0])
+	}
+	var path string = directoryStructure[0]
+	directoryStructure = directoryStructure[1:]
+	for _, name := range directoryStructure {
+		path = fmt.Sprintf("%s/%s", path, name)
+	}
+	return fmt.Sprintf("%s/%s", AppDataDir, path)
 }
