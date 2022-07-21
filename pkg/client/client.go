@@ -9,6 +9,7 @@ import (
 
 	"github.com/cretz/bine/tor"
 	"github.com/humbertovnavarro/krat/pkg/config"
+	"github.com/humbertovnavarro/krat/pkg/onion"
 	"github.com/humbertovnavarro/krat/pkg/tor_engine"
 	"github.com/ipsn/go-libtor"
 	"github.com/sirupsen/logrus"
@@ -17,7 +18,7 @@ import (
 var torStartConf = &tor.StartConf{
 	ProcessCreator: libtor.Creator,
 	DebugWriter:    nil,
-	DataDir:        fmt.Sprintf("%s/%s", config.UserDir, "tor"),
+	DataDir:        config.NewFilePath("tor"),
 }
 
 func Start() error {
@@ -34,10 +35,9 @@ func Start() error {
 
 func OnTorConnect(e *tor_engine.TorEngine) {
 	fmt.Println("tor connected")
-	sshOnion, err := e.NewOnionListener(&tor.ListenConf{
-		RemotePorts: []int{22},
-		Version3:    true,
-		Detach:      false,
+	sshOnion, err := onion.New(e, onion.OnionServiceConfig{
+		Port: 22,
+		Tag:  "ssh",
 	})
 	if err != nil {
 		panic(err)

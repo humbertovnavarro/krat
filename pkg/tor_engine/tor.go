@@ -2,7 +2,6 @@ package tor_engine
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"time"
 
@@ -44,20 +43,6 @@ func (e *TorEngine) Start() error {
 	// call the on connect callback inside of TorEngine
 	e.onConnect(e)
 	return err
-}
-
-// Create a new .onion hideen service and return a *tor.OnionService (interface compatible with net.Listener)
-func (e *TorEngine) NewOnionListener(listenConf *tor.ListenConf) (*tor.OnionService, error) {
-	if e.Tor == nil {
-		return nil, errors.New("tried to create a new onion service before starting tor")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	onion, err := e.Tor.Listen(ctx, listenConf)
-	if err != nil {
-		return nil, err
-	}
-	return onion, nil
 }
 
 // Create a new http client proxied through tor
