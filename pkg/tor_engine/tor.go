@@ -54,6 +54,7 @@ func (e *TorEngine) NewHTTPClient() (*http.Client, error) {
 	return &http.Client{Transport: &http.Transport{DialContext: dialer.DialContext}}, nil
 }
 
+// Create a new dialer proxied through tor
 func (c *TorEngine) NewDialer() (*tor.Dialer, error) {
 	if c.Dialer != nil {
 		return c.Dialer, nil

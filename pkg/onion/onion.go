@@ -1,31 +1,31 @@
 package onion
 
+// extends "github.com/cretz/bine/tor" OnionService, enforces one port per onion, and enforces v3 addressing
+// https://www.youtube.com/watch?v=-FtCTW2rVFM
+
 import (
 	"context"
+	"encoding/hex"
 	"errors"
-	"os"
 	"time"
 
 	"github.com/cretz/bine/tor"
 	"github.com/cretz/bine/torutil/ed25519"
-	"github.com/humbertovnavarro/krat/pkg/config"
+	"github.com/humbertovnavarro/krat/pkg/db"
 	"github.com/humbertovnavarro/krat/pkg/tor_engine"
 	"github.com/sirupsen/logrus"
 )
 
 type OnionServiceConfig struct {
-	Port  int
-	Onion string `json:"onion"`
-	Tag   string `json:"tag"`
-	Key   *ed25519.KeyPair
+	Port int
+	ID   string
 }
 
 type Onion struct {
 	*tor.OnionService
 }
 
-// Creates a "github.com/cretz/bine/tor".OnionService
-func createOnionSocket(e *tor_engine.TorEngine, conf *tor.ListenConf) (*tor.OnionService, error) {
+func createBineOnionSocket(e *tor_engine.TorEngine, conf *tor.ListenConf) (*tor.OnionService, error) {
 	if e.Tor == nil || !e.Open {
 		return nil, errors.New("tried to create a new onion service but tor is not ready")
 	}
@@ -39,40 +39,70 @@ func createOnionSocket(e *tor_engine.TorEngine, conf *tor.ListenConf) (*tor.Onio
 	return onion, nil
 }
 
-func generateOnion(e *tor_engine.TorEngine, config *OnionServiceConfig) (*Onion, error) {
+func tryGetPrivateKey(id string) (ed25519.PrivateKey, error) {
+	stmt := `SELECT privateKey FROM OnionServices WHERE onionServiceID = ?`
+	rows, err := db.DB.Query(stmt, id)
+	if err != nil {
+		logrus.Error(err)
+		return nil, err
+	}
+	defer rows.Close()
+	var privateKeyHex string
+	for rows.Next() {
+		err = rows.Scan(&privateKeyHex)
+		if err != nil {
+			logrus.Error(err)
+		}
+	}
+	privateKey := make([]byte, 64)
+	num, err := hex.Decode(privateKey, []byte(privateKeyHex))
+	if err != nil {
+		return nil, err
+	}
+	if num != 64 {
+		return nil, errors.New("wrong private key size for private key")
+	}
+	return privateKey, nil
+}
+
+// loads the onion service specified in config.ID if it exists, otherwise create a new onion service
+func New(e *tor_engine.TorEngine, config *OnionServiceConfig) (*Onion, error) {
 	listenConf := &tor.ListenConf{
 		RemotePorts: []int{config.Port},
 		Version3:    true,
 		Detach:      true,
 	}
-	if config.Key != nil {
-		listenConf.Key = config.Key
+	var keyPair ed25519.KeyPair
+	existingKey, err := tryGetPrivateKey(config.ID)
+	if err != nil && existingKey == nil {
+		logrus.Error(err)
 	}
-	onion, err := createOnionSocket(e, listenConf)
+	if existingKey == nil {
+		logrus.Infof("generating new key for service %s", config.ID)
+		generatedKey, err := ed25519.GenerateKey(nil)
+		if err != nil {
+			logrus.Fatal(err)
+		}
+		keyPair = generatedKey
+	} else {
+		keyPair = existingKey.KeyPair()
+	}
+	listenConf.Key = keyPair
+	bineOnion, err := createBineOnionSocket(e, listenConf)
 	if err != nil {
 		logrus.Error(err)
 		return nil, err
 	}
-	service := &Onion{
-		onion,
+	onion := &Onion{
+		bineOnion,
 	}
-	err = service.serialize()
-	if err != nil {
-		logrus.Error(err)
-		return service, nil
+	if existingKey == nil {
+		err = serialize(onion, config)
+		if err != nil {
+			logrus.Error(err)
+		}
 	}
-	config.Onion = onion.ID
-	return service, nil
-}
-
-func New(e *tor_engine.TorEngine, config *OnionServiceConfig) (*Onion, error) {
-	// existing, err := fetchOnionServiceConfig(config.Tag)
-	// if err != nil {
-	// 	logrus.Infof("found existing onion service %s running on port %d", config.Tag, config.Port)
-	// 	return generateOnion(e, *existing)
-	// }
-	logrus.Infof("creating new onion service %s running on port %d", config.Tag, config.Port)
-	return generateOnion(e, config)
+	return onion, nil
 }
 
 func (o *Onion) AssertKeyIsED25519KeyPair() ed25519.KeyPair {
@@ -83,19 +113,9 @@ func (o *Onion) AssertKeyIsED25519KeyPair() ed25519.KeyPair {
 	return key
 }
 
-func (o *Onion) serialize() error {
+func serialize(o *Onion, s *OnionServiceConfig) error {
 	keyPair := o.AssertKeyIsED25519KeyPair()
-	err := os.MkdirAll(config.NewFilePath("tor", "onions"), 0600)
-	if err != nil {
-		return err
-	}
-	file, err := os.Create(config.NewFilePath("tor", "onions", o.ID))
-	if err != nil {
-		return err
-	}
-	_, err = file.Write(keyPair.PrivateKey())
-	if err != nil {
-		return err
-	}
-	return nil
+	stmt := `INSERT INTO OnionServices (onionServiceID, onionUrl, port, privateKey) VALUES (?, ?, ?, ?)`
+	_, err := db.DB.Exec(stmt, s.ID, o.ID, o.RemotePorts[0], hex.EncodeToString(keyPair.PrivateKey()))
+	return err
 }

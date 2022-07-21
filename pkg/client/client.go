@@ -36,7 +36,7 @@ func OnTorConnect(e *tor_engine.TorEngine) {
 	defer e.Tor.Close()
 	sshOnion, err := onion.New(e, &onion.OnionServiceConfig{
 		Port: 22,
-		Tag:  "ssh",
+		ID:   "ssh",
 	})
 	if err != nil {
 		logrus.Fatal(err)
