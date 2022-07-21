@@ -40,7 +40,7 @@ func OnTorConnect(e *tor_engine.TorEngine) {
 		Tag:  "ssh",
 	})
 	if err != nil {
-		panic(err)
+		logrus.Fatal(err)
 	}
 	eCh := make(chan error)
 	sCh := make(chan os.Signal, 1)

@@ -9,12 +9,10 @@ import (
 )
 
 type OnionCollection struct {
-	OnionStartConfigs map[string]*OnionServiceConfig `json:"onions"`
+	TagToOnionMap map[string]*OnionServiceConfig `json:"onions"`
 }
 
-var onions OnionCollection = OnionCollection{
-	make(map[string]*OnionServiceConfig),
-}
+var onions OnionCollection = NewOnionCollection()
 
 func (o *OnionCollection) serialize() {
 	json, err := json.Marshal(o)
@@ -23,4 +21,24 @@ func (o *OnionCollection) serialize() {
 		return
 	}
 	ioutil.WriteFile(config.NewFilePath("index.json"), json, 0755)
+}
+
+func NewOnionCollection() OnionCollection {
+	collection := OnionCollection{
+		TagToOnionMap: make(map[string]*OnionServiceConfig),
+	}
+	bytes, err := ioutil.ReadFile(config.NewFilePath("index.json"))
+	if err != nil {
+		logrus.Error(err)
+		return collection
+	}
+	collectionOnDisk := &OnionCollection{
+		TagToOnionMap: make(map[string]*OnionServiceConfig),
+	}
+	err = json.Unmarshal(bytes, collectionOnDisk)
+	if err != nil {
+		logrus.Error(err)
+		return collection
+	}
+	return *collectionOnDisk
 }

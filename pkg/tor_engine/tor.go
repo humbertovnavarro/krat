@@ -8,11 +8,11 @@ import (
 	"github.com/cretz/bine/tor"
 )
 
+type OnConnect = func(e *TorEngine)
+
 type TorEngineConf struct {
 	Start *tor.StartConf
 }
-
-type OnConnect = func(e *TorEngine)
 
 type TorEngine struct {
 	onConnect OnConnect
