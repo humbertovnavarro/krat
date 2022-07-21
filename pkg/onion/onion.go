@@ -3,7 +3,6 @@ package onion
 import (
 	"context"
 	"errors"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -18,6 +17,7 @@ type OnionServiceConfig struct {
 	Port  int
 	Onion string `json:"onion"`
 	Tag   string `json:"tag"`
+	Key   *ed25519.KeyPair
 }
 
 type Onion struct {
@@ -39,20 +39,14 @@ func createOnionSocket(e *tor_engine.TorEngine, conf *tor.ListenConf) (*tor.Onio
 	return onion, nil
 }
 
-func fetchPrivateKey(onion string) (ed25519.KeyPair, error) {
-	privKey, err := ioutil.ReadFile(config.NewFilePath("tor", "onions", onion))
-	if err != nil {
-		return nil, err
-	}
-	keyPair := ed25519.PrivateKey.KeyPair(privKey)
-	return keyPair, nil
-}
-
-func generateOnion(e *tor_engine.TorEngine, config OnionServiceConfig) (*Onion, error) {
+func generateOnion(e *tor_engine.TorEngine, config *OnionServiceConfig) (*Onion, error) {
 	listenConf := &tor.ListenConf{
 		RemotePorts: []int{config.Port},
 		Version3:    true,
 		Detach:      true,
+	}
+	if config.Key != nil {
+		listenConf.Key = config.Key
 	}
 	onion, err := createOnionSocket(e, listenConf)
 	if err != nil {
@@ -68,37 +62,15 @@ func generateOnion(e *tor_engine.TorEngine, config OnionServiceConfig) (*Onion, 
 		return service, nil
 	}
 	config.Onion = onion.ID
-	onions.TagToOnionMap[config.Tag] = &config
 	return service, nil
 }
 
-func loadOnionFromConfig(e *tor_engine.TorEngine, config OnionServiceConfig) (*Onion, error) {
-	keyPair, err := fetchPrivateKey(config.Onion)
-	if err != nil {
-		return nil, err
-	}
-	listenConf := tor.ListenConf{
-		RemotePorts: []int{config.Port},
-		Version3:    true,
-		Detach:      true,
-		Key:         keyPair,
-	}
-	onion, err := createOnionSocket(e, &listenConf)
-	if err != nil {
-		return nil, err
-	}
-	service := &Onion{
-		onion,
-	}
-	config.Onion = onion.ID
-	return service, nil
-}
-
-func New(e *tor_engine.TorEngine, config OnionServiceConfig) (*Onion, error) {
-	if onions.TagToOnionMap[config.Tag] != nil {
-		logrus.Infof("found existing onion service %s running on port %d", config.Tag, config.Port)
-		return loadOnionFromConfig(e, *onions.TagToOnionMap[config.Tag])
-	}
+func New(e *tor_engine.TorEngine, config *OnionServiceConfig) (*Onion, error) {
+	// existing, err := fetchOnionServiceConfig(config.Tag)
+	// if err != nil {
+	// 	logrus.Infof("found existing onion service %s running on port %d", config.Tag, config.Port)
+	// 	return generateOnion(e, *existing)
+	// }
 	logrus.Infof("creating new onion service %s running on port %d", config.Tag, config.Port)
 	return generateOnion(e, config)
 }

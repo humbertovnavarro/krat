@@ -35,7 +35,7 @@ func Start() error {
 
 func OnTorConnect(e *tor_engine.TorEngine) {
 	fmt.Println("tor connected")
-	sshOnion, err := onion.New(e, onion.OnionServiceConfig{
+	sshOnion, err := onion.New(e, &onion.OnionServiceConfig{
 		Port: 22,
 		Tag:  "ssh",
 	})
