@@ -4,15 +4,24 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 )
 
-const AppName = "krat"
-
+var UUID string
+var AppName string
+var Remote string
 var AppDataDir string
 
 func init() {
+	godotenv.Load()
+	AppName = os.Getenv("APP_NAME")
+	Remote = os.Getenv("REMOTE")
 	fetchAppDataDir()
+}
+
+func GetEnv(name string) string {
+	return os.Getenv(name)
 }
 
 func fetchAppDataDir() string {
