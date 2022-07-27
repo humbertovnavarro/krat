@@ -4,47 +4,49 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/humbertovnavarro/krat/pkg/db"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 var UUID string
 var AppName string
 var Remote string
 var AppDataDir string
+var DB *gorm.DB
+var LogDB *gorm.DB
 
 func init() {
 	godotenv.Load()
 	AppName = os.Getenv("APP_NAME")
 	Remote = os.Getenv("REMOTE")
-	fetchAppDataDir()
+	d, err := os.UserHomeDir()
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	AppDataDir = d
+	db, ldb := db.New()
+	DB = db
+	LogDB = ldb
 }
 
 func GetEnv(name string) string {
 	return os.Getenv(name)
 }
 
-func fetchAppDataDir() string {
-	d, err := os.UserHomeDir()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	appDir := fmt.Sprintf("%s/.%s", d, AppName)
-	AppDataDir = appDir
-	return appDir
-}
-
-func NewFilePath(directoryStructure ...string) string {
+// returns the file directory structure specified by variable args in app storage directory
+func FilePath(directoryStructure ...string) string {
 	if len(directoryStructure) == 0 {
-		return AppDataDir
+		return fmt.Sprintf("%s/.%s", AppDataDir, AppName)
 	}
 	if len(directoryStructure) == 1 {
-		return fmt.Sprintf("%s/%s", AppDataDir, directoryStructure[0])
+		return fmt.Sprintf("%s/%s/%s", AppDataDir, AppName, directoryStructure[0])
 	}
 	var path string = directoryStructure[0]
 	directoryStructure = directoryStructure[1:]
 	for _, name := range directoryStructure {
 		path = fmt.Sprintf("%s/%s", path, name)
 	}
-	return fmt.Sprintf("%s/%s", AppDataDir, path)
+	return fmt.Sprintf("%s/%s/%s", AppDataDir, AppName, path)
 }

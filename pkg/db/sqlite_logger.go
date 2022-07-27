@@ -5,28 +5,36 @@ import (
 	"os"
 	"time"
 
+	"github.com/humbertovnavarro/krat/pkg/models"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
-const DAY = time.Hour * 24
-const LOG_CLEANUP_INTERVAL = DAY * 7
+const LOG_CLEANUP_INTERVAL = time.Minute
 
 var queue = make([]logrus.Entry, 0)
 var lastClean = time.Now()
 
-type SqliteHook struct{}
+type SqliteHook struct {
+	db *gorm.DB
+}
 
-func NewSqliteHook() *SqliteHook {
-	return &SqliteHook{}
+func NewSqliteHook(db *gorm.DB) *SqliteHook {
+	return &SqliteHook{
+		db,
+	}
 }
 
 func (hook *SqliteHook) Log(entry *logrus.Entry) error {
 	line, err := entry.String()
+	hook.db.Create(&models.Log{
+		Level: uint32(entry.Level),
+		Text:  line,
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unable to read entry, %v", err)
 		return err
 	}
-	_, err = DB.Exec(`INSERT INTO Logs (logLevel, logEntry, createdAt) VALUES (?, ?, ?)`, entry.Level, line, time.Now().UnixMilli())
 	if err != nil {
 		fmt.Printf("unable to log to sqlite db, %s \n", err)
 		return err
@@ -35,7 +43,7 @@ func (hook *SqliteHook) Log(entry *logrus.Entry) error {
 }
 
 func (hook *SqliteHook) Fire(entry *logrus.Entry) error {
-	if DB == nil {
+	if hook.db == nil {
 		queue = append(queue, *entry)
 		return nil
 	}
@@ -46,12 +54,16 @@ func (hook *SqliteHook) Fire(entry *logrus.Entry) error {
 		queue = queue[1:]
 	}
 	if lastClean.UnixMilli() < time.Now().UnixMilli()-LOG_CLEANUP_INTERVAL.Milliseconds() {
-		CleanupLogs()
 		lastClean = time.Now()
+		hook.Cleanup()
 	}
 	return nil
 }
 
 func (hook *SqliteHook) Levels() []logrus.Level {
 	return logrus.AllLevels
+}
+
+func (hook *SqliteHook) Cleanup() {
+	hook.db.Delete(models.Log{}, "CreatedAt < ?", time.Now().UnixMilli()-LOG_CLEANUP_INTERVAL.Milliseconds())
 }

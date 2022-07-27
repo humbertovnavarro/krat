@@ -1,30 +1,35 @@
 package client
 
 import (
-	"github.com/cretz/bine/tor"
+	bine "github.com/cretz/bine/tor"
 	"github.com/humbertovnavarro/krat/pkg/config"
-	"github.com/humbertovnavarro/krat/pkg/db"
-	"github.com/humbertovnavarro/krat/pkg/onion"
-	"github.com/humbertovnavarro/krat/pkg/tor_engine"
+	"github.com/humbertovnavarro/krat/pkg/restapi"
+	"github.com/humbertovnavarro/krat/pkg/sshclient"
+	"github.com/humbertovnavarro/krat/pkg/tor"
 	"github.com/ipsn/go-libtor"
 	"github.com/sirupsen/logrus"
 )
 
-var torStartConf = &tor.StartConf{
+var torStartConf = &bine.StartConf{
 	ProcessCreator: libtor.Creator,
-	DebugWriter:    nil,
-	DataDir:        config.NewFilePath("tor"),
+	DebugWriter:    logrus.New().Writer(),
+	DataDir:        config.FilePath("tor"),
 }
 
-func init() {
-	db.Open()
+// start the services without wrapping them through tor
+func StartDebug() error {
+	eCh := make(chan error)
+	go restapi.StartDebug(eCh)
+	go sshclient.StartDebug(eCh)
+	err := <-eCh
+	return err
 }
 
 func Start() error {
-	config := &tor_engine.TorEngineConf{
+	config := &tor.TorEngineConf{
 		Start: torStartConf,
 	}
-	torEngine := tor_engine.New(config, OnTorConnect)
+	torEngine := tor.New(config, OnTorConnect)
 	err := torEngine.Start()
 	if err != nil {
 		panic(err)
@@ -32,15 +37,13 @@ func Start() error {
 	return nil
 }
 
-func OnTorConnect(e *tor_engine.TorEngine) {
+func OnTorConnect(e *tor.TorEngine) {
 	defer e.Tor.Close()
-	sshOnion, err := onion.New(e, &onion.OnionServiceConfig{
-		Port: 22,
-		ID:   "ssh",
-	})
-	if err != nil {
-		logrus.Fatal(err)
-	}
 	eCh := make(chan error)
-	StartSSHServer(sshOnion, eCh)
+	go restapi.Start(e, eCh)
+	go sshclient.Start(e, eCh)
+	err := <-eCh
+	if err != nil {
+		logrus.Error(err)
+	}
 }

@@ -8,19 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAppDataDir(t *testing.T) {
+func TestFilePath(t *testing.T) {
+	AppName = "app"
 	homeDir, err := os.UserHomeDir()
 	assert.Nil(t, err)
-	assert.Equal(t, AppDataDir, fmt.Sprintf("%s/%s", homeDir, AppName))
-}
-
-func TestNewFilePath(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	assert.Nil(t, err)
-	dir := NewFilePath("foo", "bar", "buzz", "bazz")
+	dir := FilePath("foo", "bar", "buzz", "bazz")
 	expected := fmt.Sprintf("%s/%s/%s/%s/%s/%s", homeDir, AppName, "foo", "bar", "buzz", "bazz")
 	assert.Equal(t, expected, dir)
-	dir = NewFilePath("foo")
+	dir = FilePath("foo")
 	expected = fmt.Sprintf("%s/%s/%s", homeDir, AppName, "foo")
 	assert.Equal(t, expected, dir)
 }

@@ -1,4 +1,4 @@
-package tor_engine
+package tor
 
 import (
 	"context"
