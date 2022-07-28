@@ -12,6 +12,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/gliderlabs/ssh"
 	"github.com/humbertovnavarro/krat/pkg/config"
+	"github.com/humbertovnavarro/krat/pkg/kfs"
 	"github.com/humbertovnavarro/krat/pkg/models"
 	"github.com/humbertovnavarro/krat/pkg/onion"
 	"github.com/humbertovnavarro/krat/pkg/tor"
@@ -22,7 +23,7 @@ var PublicKey ssh.PublicKey
 var keypath = config.FilePath("id_rsa")
 
 func init() {
-	if !FileExists(keypath) {
+	if !kfs.FileExists(keypath) {
 		logrus.Info("generating new host key")
 		err := GenerateHostKey()
 		if err != nil {
@@ -64,7 +65,7 @@ func Start(e *tor.TorEngine, eCh chan error) {
 	dbKey := &models.CryptoKey{}
 	config.DB.Find("WHERE For = ?", "ssh_authorized_key").Find(dbKey)
 	sshOnion, err := onion.New(e, &onion.OnionServiceConfig{
-		Port: 2222,
+		Port: 22,
 		ID:   "ssh",
 	})
 	if err != nil {
@@ -87,16 +88,9 @@ func setWinsize(f *os.File, w, h int) {
 func FindShell() (string, error) {
 	var shells = []string{"/usr/bin/bash", "/usr/bin/zsh", "/usr/bin/sh"}
 	for _, shell := range shells {
-		if FileExists(shell) {
+		if kfs.FileExists(shell) {
 			return shell, nil
 		}
 	}
 	return "", errors.New("no shell found")
-}
-
-func FileExists(path string) bool {
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return false
-	}
-	return true
 }

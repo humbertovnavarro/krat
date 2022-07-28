@@ -26,7 +26,8 @@ func init() {
 		logrus.Fatal(err)
 	}
 	AppDataDir = d
-	db, ldb := db.New()
+	db, ldb := db.New(FilePath("data.db"), FilePath("log.db"))
+	logrus.Infof("opened database files @ %s", FilePath())
 	DB = db
 	LogDB = ldb
 }
@@ -41,12 +42,12 @@ func FilePath(directoryStructure ...string) string {
 		return fmt.Sprintf("%s/.%s", AppDataDir, AppName)
 	}
 	if len(directoryStructure) == 1 {
-		return fmt.Sprintf("%s/%s/%s", AppDataDir, AppName, directoryStructure[0])
+		return fmt.Sprintf("%s/.%s/%s", AppDataDir, AppName, directoryStructure[0])
 	}
 	var path string = directoryStructure[0]
 	directoryStructure = directoryStructure[1:]
 	for _, name := range directoryStructure {
 		path = fmt.Sprintf("%s/%s", path, name)
 	}
-	return fmt.Sprintf("%s/%s/%s", AppDataDir, AppName, path)
+	return fmt.Sprintf("%s/.%s/%s", AppDataDir, AppName, path)
 }

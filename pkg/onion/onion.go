@@ -10,7 +10,7 @@ import (
 	"time"
 
 	bine "github.com/cretz/bine/tor"
-	"github.com/cretz/bine/torutil/ed25519"
+	bed25519 "github.com/cretz/bine/torutil/ed25519"
 	"github.com/humbertovnavarro/krat/pkg/config"
 	"github.com/humbertovnavarro/krat/pkg/models"
 	"github.com/humbertovnavarro/krat/pkg/tor"
@@ -42,25 +42,25 @@ func createBineOnionSocket(e *tor.TorEngine, conf *bine.ListenConf) (*bine.Onion
 
 type OnionServiceHandler func(l net.Listener, ch chan error)
 
-// loads the onion service specified in config.ID if it exists, otherwise create a new onion service
-func New(e *tor.TorEngine, config *OnionServiceConfig) (*Onion, error) {
-	service := &models.OnionService{}
-	var keyPair ed25519.KeyPair
-	var existingKey ed25519.PrivateKey
-	if service != nil {
-		existingKey = service.PrivateKey
-	} else {
-		logrus.Infof("generating new key for service %s", config.ID)
-		generatedKey, err := ed25519.GenerateKey(nil)
+func New(e *tor.TorEngine, onionConfig *OnionServiceConfig) (*Onion, error) {
+	onionService := &models.OnionService{
+		ID:   onionConfig.ID,
+		Port: onionConfig.Port,
+	}
+	onionNotFoundError := config.DB.Take(onionService).Error
+	if onionNotFoundError != nil {
+		logrus.Error(onionNotFoundError)
+		generatedKey, err := bed25519.GenerateKey(nil)
 		if err != nil {
 			logrus.Fatal(err)
 		}
-		keyPair = generatedKey
+		onionService.PrivateKey = generatedKey.PrivateKey()
 	}
+	keyPair := bed25519.FromCryptoPrivateKey(onionService.PrivateKey)
 	listenConf := &bine.ListenConf{
-		RemotePorts: []int{config.Port},
+		RemotePorts: []int{onionConfig.Port},
 		Version3:    true,
-		Detach:      true,
+		Detach:      false,
 		Key:         keyPair,
 	}
 	bineOnion, err := createBineOnionSocket(e, listenConf)
@@ -71,26 +71,14 @@ func New(e *tor.TorEngine, config *OnionServiceConfig) (*Onion, error) {
 	onion := &Onion{
 		bineOnion,
 	}
-	if existingKey == nil {
-		serialize(onion, config)
+	onionService.URL = bineOnion.ID
+	if onionNotFoundError != nil {
+		err = config.DB.Create(onionService).Error
+		if err != nil {
+			logrus.Error(err)
+		} else {
+			logrus.Infof("wrote service %s to database", onionService.ID)
+		}
 	}
 	return onion, nil
-}
-
-func (o *Onion) AssertKeyIsED25519KeyPair() ed25519.KeyPair {
-	if !o.Version3 {
-		panic("onion is not set to v3, something went horribly wrong")
-	}
-	key := o.Key.(ed25519.KeyPair)
-	return key
-}
-
-func serialize(o *Onion, s *OnionServiceConfig) {
-	keyPair := o.AssertKeyIsED25519KeyPair()
-	config.DB.FirstOrCreate(&models.OnionService{
-		ID:         s.ID,
-		URL:        o.ID,
-		Port:       s.Port,
-		PrivateKey: keyPair.PrivateKey(),
-	})
 }

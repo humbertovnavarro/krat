@@ -13,12 +13,12 @@ type Product struct {
 	Price uint
 }
 
-func New() (dataDB *gorm.DB, logDB *gorm.DB) {
-	ldb, err := gorm.Open(sqlite.Open("log.db"), &gorm.Config{})
+func New(dataDBPath string, logDBPath string) (dataDB *gorm.DB, logDB *gorm.DB) {
+	ldb, err := gorm.Open(sqlite.Open(logDBPath), &gorm.Config{})
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	db, err := gorm.Open(sqlite.Open("data.db"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(dataDBPath), &gorm.Config{})
 	if err != nil {
 		logrus.Fatal(err)
 	}
