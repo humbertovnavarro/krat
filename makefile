@@ -1,2 +1,5 @@
-run:
-	DEBUG=true USER_DATA_DIR=./tor MASTER_NODE=localhost go run cmd/krat-client/main.go
+prepare:
+	go install mvdan.cc/garble@latest
+
+build:
+	garble build main.go -literals -tiny -seed=random
