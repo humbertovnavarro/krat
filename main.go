@@ -10,6 +10,8 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/cretz/bine/tor"
@@ -28,8 +30,8 @@ func init() {
 //go:embed tor.exe
 var torExe []byte
 
-//go:embed next
-var nextFS embed.FS
+//go:embed client/build
+var client embed.FS
 
 func RandomString(stringlen int) string {
 	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -69,13 +71,9 @@ func createTorHTTPClient(t *tor.Tor) *http.Client {
 }
 
 func main() {
-	distFS, err := fs.Sub(nextFS, "nextjs/dist")
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	torExePath := createTorExecutable()
 	torDataDir := fmt.Sprintf("%s/%s", os.TempDir(), RandomString(10))
+	public, _ := fs.Sub(client, "client/build")
 	os.MkdirAll(torDataDir, 0755)
 
 	// Start tor with default config (can set start conf's DebugWriter to os.Stdout for debug logs)
@@ -109,13 +107,17 @@ func main() {
 	defer onion.Close()
 	fmt.Printf("Open Tor browser and navigate to http://%v.onion\n", onion.ID)
 	fmt.Println("Press enter to exit")
-	http.Handle("/", http.FileServer(http.FS(distFS)))
-	http.Serve(onion, http.DefaultServeMux)
-	// TODO: Wait for exit
-	errChan := make(chan error)
-	<-errChan
+	http.Handle("/", http.FileServer(http.FS(public)))
+	// TODO: Websocket CLI
+	// TODO: Wait for ctrl+c to exit
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
+	fmt.Println("Blocking, press ctrl+c to continue...")
+	go func() {
+		http.Serve(onion, http.DefaultServeMux)
+	}()
+	<-done // Will block here until user hits ctrl+c
 	t.Close()
-	// Clean up created files
 	notifyOffline(httpClient, onion.ID)
 	os.Remove(torDataDir)
 	os.Remove(torExePath)
